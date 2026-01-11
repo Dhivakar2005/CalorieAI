@@ -110,11 +110,22 @@ const ImageUploader = () => {
       setResults(nutritionData);
     } catch (err) {
       console.error("Analysis error:", err);
-      setError(
-        err instanceof Error 
-          ? `Failed to analyze image: ${err.message}` 
-          : "Failed to analyze image. Please try again."
-      );
+      
+      // Check if it's a network error (likely CORS/localhost issue)
+      const isNetworkError = err instanceof TypeError && err.message === "Failed to fetch";
+      
+      if (isNetworkError) {
+        setError(
+          "Cannot connect to the webhook. If using localhost, please use a public URL (ngrok) instead. " +
+          "Update the URL in src/config.ts"
+        );
+      } else {
+        setError(
+          err instanceof Error 
+            ? `Failed to analyze image: ${err.message}` 
+            : "Failed to analyze image. Please try again."
+        );
+      }
     } finally {
       setIsAnalyzing(false);
     }
