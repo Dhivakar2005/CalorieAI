@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Camera, X, Loader2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NutritionResults, { NutritionData } from "./NutritionResults";
-
-const WEBHOOK_URL = "http://localhost:5678/webhook-test/ca457eba-0293-4f7f-a79d-9ac18ae2e605";
+import { config } from "@/config";
 
 const ImageUploader = () => {
   const [image, setImage] = useState<string | null>(null);
@@ -77,7 +76,7 @@ const ImageUploader = () => {
       const base64Image = await fileToBase64(file);
 
       // Send to webhook
-      const response = await fetch(WEBHOOK_URL, {
+      const response = await fetch(config.NUTRITION_WEBHOOK_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
