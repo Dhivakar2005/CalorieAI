@@ -4,6 +4,8 @@ import { Upload, Camera, X, Loader2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NutritionResults, { NutritionData } from "./NutritionResults";
 
+const WEBHOOK_URL = "http://localhost:5678/webhook-test/ca457eba-0293-4f7f-a79d-9ac18ae2e605";
+
 const ImageUploader = () => {
   const [image, setImage] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -55,6 +57,15 @@ const ImageUploader = () => {
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   }, []);
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const analyzeImage = async () => {
     if (!file) return;
 
@@ -62,29 +73,49 @@ const ImageUploader = () => {
     setError(null);
 
     try {
-      // Simulate API call - Replace this with your actual API endpoint
-      // const formData = new FormData();
-      // formData.append("image", file);
-      // const response = await fetch("YOUR_API_ENDPOINT", {
-      //   method: "POST",
-      //   body: formData,
-      // });
-      // const data = await response.json();
+      // Convert file to base64
+      const base64Image = await fileToBase64(file);
 
-      // Simulated response for demo
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Send to webhook
+      const response = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image: base64Image,
+          filename: file.name,
+          mimeType: file.type,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+
+      const data = await response.json();
       
-      // Mock data - Replace with actual API response
-      const mockData: NutritionData = {
-        calories: Math.floor(Math.random() * 400) + 200,
-        protein: Math.floor(Math.random() * 30) + 10,
-        carbohydrates: Math.floor(Math.random() * 50) + 20,
-        fat: Math.floor(Math.random() * 25) + 5,
-      };
+      // Handle the response format - it comes as an array with output property
+      let nutritionData: NutritionData;
+      
+      if (Array.isArray(data) && data[0]?.output) {
+        nutritionData = data[0].output;
+      } else if (data.output) {
+        nutritionData = data.output;
+      } else if (data.status && data.food && data.total) {
+        nutritionData = data;
+      } else {
+        throw new Error("Invalid response format from server");
+      }
 
-      setResults(mockData);
-    } catch {
-      setError("Failed to analyze image. Please try again.");
+      setResults(nutritionData);
+    } catch (err) {
+      console.error("Analysis error:", err);
+      setError(
+        err instanceof Error 
+          ? `Failed to analyze image: ${err.message}` 
+          : "Failed to analyze image. Please try again."
+      );
     } finally {
       setIsAnalyzing(false);
     }
