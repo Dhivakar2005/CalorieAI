@@ -41,14 +41,28 @@ serve(async (req) => {
       }),
     });
 
+    const responseText = await response.text();
+    console.log(`Webhook response status: ${response.status}, body length: ${responseText.length}`);
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Webhook error: ${response.status} - ${errorText}`);
+      console.error(`Webhook error: ${response.status} - ${responseText}`);
       throw new Error(`Webhook responded with status ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('Webhook response received successfully');
+    if (!responseText || responseText.trim() === '') {
+      console.error('Webhook returned empty response');
+      throw new Error('Webhook returned empty response');
+    }
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`Failed to parse webhook response: ${responseText.substring(0, 500)}`);
+      throw new Error('Invalid JSON response from webhook');
+    }
+    
+    console.log('Webhook response parsed successfully');
 
     // Parse the response - handle various formats
     let nutritionData;
