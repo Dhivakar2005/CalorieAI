@@ -2,8 +2,8 @@ import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Camera, X, Loader2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import NutritionResults, { NutritionData } from "./NutritionResults";
-import { config } from "@/config";
 
 const ImageUploader = () => {
   const [image, setImage] = useState<string | null>(null);
@@ -75,57 +75,31 @@ const ImageUploader = () => {
       // Convert file to base64
       const base64Image = await fileToBase64(file);
 
-      // Send to webhook
-      const response = await fetch(config.NUTRITION_WEBHOOK_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // Call the edge function
+      const { data, error: fnError } = await supabase.functions.invoke('analyze-nutrition', {
+        body: {
           image: base64Image,
           filename: file.name,
           mimeType: file.type,
-        }),
+        },
       });
 
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
+      if (fnError) {
+        throw new Error(fnError.message || 'Failed to analyze image');
       }
 
-      const data = await response.json();
-      
-      // Handle the response format - it comes as an array with output property
-      let nutritionData: NutritionData;
-      
-      if (Array.isArray(data) && data[0]?.output) {
-        nutritionData = data[0].output;
-      } else if (data.output) {
-        nutritionData = data.output;
-      } else if (data.status && data.food && data.total) {
-        nutritionData = data;
-      } else {
-        throw new Error("Invalid response format from server");
+      if (data.error) {
+        throw new Error(data.error);
       }
 
-      setResults(nutritionData);
+      setResults(data as NutritionData);
     } catch (err) {
       console.error("Analysis error:", err);
-      
-      // Check if it's a network error (likely CORS/localhost issue)
-      const isNetworkError = err instanceof TypeError && err.message === "Failed to fetch";
-      
-      if (isNetworkError) {
-        setError(
-          "Cannot connect to the webhook. If using localhost, please use a public URL (ngrok) instead. " +
-          "Update the URL in src/config.ts"
-        );
-      } else {
-        setError(
-          err instanceof Error 
-            ? `Failed to analyze image: ${err.message}` 
-            : "Failed to analyze image. Please try again."
-        );
-      }
+      setError(
+        err instanceof Error 
+          ? err.message 
+          : "Failed to analyze image. Please try again."
+      );
     } finally {
       setIsAnalyzing(false);
     }
